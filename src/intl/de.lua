@@ -37,7 +37,7 @@ return {
   },
   linkCaptions = {
     Runes = "Runen",
-    WeaponRune = "Waffen Rune",
+    WeaponRune = "Waffenrunen",
     Tier = "Grad",
   }
 };

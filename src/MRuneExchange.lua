@@ -96,6 +96,7 @@ end
 function MRuneExchange.OnSelectTargetRune(button)
   MRuneExchange.clearState();
   MRuneExchange.ScanBag();
+  MRuneExchange.calcBaseRunes();
   state.targetRune = button.value;
 end
 
@@ -143,7 +144,6 @@ function MRuneExchange.ScanBag()
     end
   );
   state.computedRunes = computedRunes;
-  MRuneExchange.calcBaseRunes();
 end
 
 function MRuneExchange.calcBaseRunes()
@@ -153,7 +153,7 @@ function MRuneExchange.calcBaseRunes()
   if state.targetRune == nil then
     return;
   end
-  helper.log("[mRuneExchange] calculate base runes !!")
+  --helper.log("[mRuneExchange] calculate base runes !!");
   MRuneExchange.clearLog();
   state.requiredBaseRunes = MRuneExchange.findRequiredRunes(db.runes[state.targetRune].mats, function(rune) return rune.isBase == true end);
   local numberOfItemRequired = 0;
@@ -332,6 +332,7 @@ function MRuneExchange.HandleEffect()
   end
   if targetEffect.action == "RESCAN_BAG" then
     MRuneExchange.ScanBag();
+    MRuneExchange.calcBaseRunes();
     return;
   end
 
@@ -342,9 +343,10 @@ function MRuneExchange.OnUpdate(_elapsedTime)
   elapsed[1] = elapsed[1] + _elapsedTime;
   elapsed[2] = elapsed[2] + _elapsedTime;
 
-  if elapsed[1] > 1 then
+  if elapsed[1] > 0.5 then
     -- UI Stuff
     elapsed[1] = 0;
+    MRuneExchange.calcBaseRunes()
     MRuneExchange.validate();
     local speed = MRuneExchangeFrame_SpeedSlider:GetValue();
     state.speed = speed;
@@ -372,6 +374,7 @@ function MRuneExchange.OnUpdate(_elapsedTime)
 
     helper.log("[mRuneExchange] Making Effect");
     MRuneExchange.ScanBag();
+    MRuneExchange.calcBaseRunes();
 
     if state.freshStarted then
       state.freshStarted = false;
@@ -575,6 +578,7 @@ end
 
 function MRuneExchange.startExchange()
   MRuneExchange.ScanBag();
+  MRuneExchange.calcBaseRunes();
   state.freshStarted = true;
   state.started = true;
 end
