@@ -19,19 +19,9 @@ function MRuneExchange.clearState()
     requiredBaseRunes = {},
     started = false,
     waitingMagicBox = nil,
-    step1 = 0,
-    step2 = 1,
     speed = 0.3,
-    recheckCount = 0,
   };
-  MRuneExchange.ScanBag();
 end
-
--- /run for i=1,3 do for j=_start,_max do _ii, _, _name,_icount=GetBagItemInfo(j); if _icount > 0 then PickupBagItem(_ii);RuneItemButton_OnClick(_G["RuneExchangeFrame_Button"..i], "x"); _start=j+1; break; end end end
--- /wait 0.1
--- /run RuneExchangeFrame_OK_OnClick();
-
---RuneExchangeOk( num );
 
 function MRuneExchange.clearLog()
   -- CLean up log text
@@ -74,10 +64,10 @@ end
 function MRuneExchange.OnLoad(this)
   MRuneExchange.clearLog();
   MRuneExchange.clearState();
+  MRuneExchange.ScanBag()
 
   local dropdownValues = helper.range(2,6);
   table.sort(dropdownValues, function(a,b) return a > b end);
-
   dropdownValues = helper.mapkv(
     dropdownValues,
     function(_, tier)
@@ -92,30 +82,25 @@ function MRuneExchange.OnLoad(this)
     MRuneExchange.pcall(MRuneExchange.OnSelectTargetRune, button);
   end
   helper.setupDropdown(MRuneExchangeFrame_SelectRuneDropdown, dropdownValues, 1000, 120, onClick);
+
   MRuneExchangeFrame_StartButton:Disable();
   MRuneExchangeFrame_SpeedSlider:SetValueStepMode("FLOAT");
   MRuneExchangeFrame_SpeedSlider:SetMinMaxValues(0.1, 1);
   MRuneExchangeFrame_SpeedSlider:SetValue(state.speed);
-  RuneExchangeFrame:Hide();
-  --this:RegisterEvent("BAG_ITEM_UPDATE");
 end
 
 function MRuneExchange.OnEvent(this, event)
-  if event == "BAG_ITEM_UPDATE" then
-    MRuneExchange.ScanBag(arg1, arg1)
-  end
+  -- KEEP THIS FUNCTION IN CASE OF FUTURE USE
 end
 
 function MRuneExchange.OnSelectTargetRune(button)
-  MRuneExchange.ScanBag();
   MRuneExchange.clearState();
+  MRuneExchange.ScanBag();
   state.targetRune = button.value;
-  MRuneExchange.calcBaseRunes();
 end
 
 
 function MRuneExchange.ScanBag()
-  helper.log("=======  Scanning bag ============");
   if RuneExchangeFrame:IsVisible() == false then
     return
   end
@@ -245,31 +230,6 @@ function MRuneExchange.findRequiredRunes(runes, predFn)
   return runes;
 end
 
-function MRuneExchange.clearMagicBox()
-  helper.log("==========================")
-  for i=51,55 do
-    local icon,name=GetGoodsItemInfo(i);
-    if name~="" or icon~="" then
-      local link = GetBagItemLink(i)
-      local itemInfo = helper.getItemLinkInfo("magic"..i, 0, link);
-      helper.log(itemInfo.linkName);
-      if itemInfo.isRune and state.computedRunes[itemInfo.linkName] ~= nil then
-        local _, target = helper.nth(state.computedRunes[itemInfo.linkName].inventoryIndexes, 1);
-        PickupBagItem(i);
-        PickupBagItem(target.inventoryIndex);
-        rescans[target.bagIndex] = 1;
-        return false;
-      end
-      local _, target = helper.nth(state.spaceIndex, 1);
-      PickupBagItem(i);
-      PickupBagItem(target.inventoryIndex);
-      rescans[target.bagIndex] = 1;
-      return false;
-    end
-  end
-  return true;
-end
-
 function MRuneExchange.clearCursor()
   if CursorHasItem() then
     local _, _i = helper.nth(state.spaceIndex, 1);
@@ -278,6 +238,7 @@ function MRuneExchange.clearCursor()
     end
   end
 end
+
 function MRuneExchange.pcallOnUpdate(_elapsedTime)
   local status, err = pcall(MRuneExchange.OnUpdate, _elapsedTime);
   if status == false then
@@ -286,6 +247,7 @@ function MRuneExchange.pcallOnUpdate(_elapsedTime)
     error(err);
   end
 end
+
 function MRuneExchange.pcall(arg0, arg1, arg2, arg3, arg4)
   local status, err = true, null;
   if arg0 == MRuneExchange.OnLoad then
@@ -311,13 +273,13 @@ function MRuneExchange.pcall(arg0, arg1, arg2, arg3, arg4)
 end
 
 local effects = {};
-local makingEffect = false;
 local finalEffect = false;
 
 function MRuneExchange.HandleEffect()
   MRuneExchange.clearCursor();
   local _, targetEffect = helper.nth(effects, 1);
   effects = helper.rest(effects);
+  helper.log("[mRuneExchange] Handling effect: " .. targetEffect.action);
 
   if targetEffect.action == "MAKE_BASE_RUNE" then
     local index1 = GetBagItemInfo(targetEffect.item1);
@@ -404,17 +366,11 @@ function MRuneExchange.OnUpdate(_elapsedTime)
       return;
     end
     if helper.count(effects) > 0 then
-      helper.log("[mRuneExchange] Handling effect");
       MRuneExchange.HandleEffect()
       return;
     end
-    --if makingEffect == true then
-    --  helper.log("[mRuneExchange] Queing creating effect");
-    --  return;
-    --end
 
     helper.log("[mRuneExchange] Making Effect");
-    makingEffect = true;
     MRuneExchange.ScanBag();
 
     if state.freshStarted then
@@ -436,7 +392,6 @@ function MRuneExchange.OnUpdate(_elapsedTime)
       end
       if helper.count(newEffects) > 0 then
         effects = newEffects;
-        makingEffect = false;
         return;
       end
     end
@@ -466,21 +421,19 @@ function MRuneExchange.OnUpdate(_elapsedTime)
       )
       runes = helper.flatten(runes);
       helper.log("[mRuneExchange] amountOfItemRequired="..amountOfItemRequired);
-      local baseRuneEffects = helper.mapkv(state.equipmentIndex, function(k, v) return v.bagIndex  end)
-      baseRuneEffects = helper.take(baseRuneEffects, amountOfItemRequired)
-      baseRuneEffects = helper.window(baseRuneEffects, 3);
-      baseRuneEffects = helper.filterArray(baseRuneEffects, function(k,v) return helper.count(v) == 3 end);
-      baseRuneEffects = helper.mapkv(baseRuneEffects, function(k,v) return { action = "MAKE_BASE_RUNE", item1 = v[1], item2 = v[2], item3 = v[3] } end)
-      baseRuneEffects = helper.zipkv(baseRuneEffects, runes, function(k1,v1, k2, v2) v1.rune = v2; return v1; end);
-      baseRuneEffects = helper.addArrayElement(baseRuneEffects, { action = "RESCAN_BAG" });
-      effects = baseRuneEffects;
-      makingEffect = false;
+      local newEffects = helper.mapkv(state.equipmentIndex, function(k, v) return v.bagIndex  end)
+      newEffects = helper.take(newEffects, amountOfItemRequired)
+      newEffects = helper.window(newEffects, 3);
+      newEffects = helper.filterArray(newEffects, function(k, v) return helper.count(v) == 3 end);
+      newEffects = helper.mapkv(newEffects, function(k, v) return { action = "MAKE_BASE_RUNE", item1 = v[1], item2 = v[2], item3 = v[3] } end)
+      newEffects = helper.zipkv(newEffects, runes, function(k1, v1, k2, v2) v1.rune = v2; return v1; end);
+      newEffects = helper.addArrayElement(newEffects, { action = "RESCAN_BAG" });
+      effects = newEffects;
       return;
     end
     if helper.count(state.requiredBaseRunes) > 0 and helper.count(state.equipmentIndex) < 3 then
       helper.log("[mRuneExchange] Not enough equipment items");
       state.started = false;
-      makingEffect = false;
     end
     if helper.any(state.computedRunes, function(k,v) return helper.count(v.items) > 1 end) then
       helper.log("[mRuneExchange] making Merging runes effect");
@@ -504,14 +457,12 @@ function MRuneExchange.OnUpdate(_elapsedTime)
       newEffects = helper.flatten(newEffects);
       newEffects = helper.addArrayElement(newEffects, { action = "RESCAN_BAG" });
       effects = newEffects;
-      makingEffect = false;
       return;
     end
 
     for targetRuneTier=2,7 do
       if targetRuneTier > db.runes[state.targetRune].tier then
         helper.log("[mRuneExchange] Completed !!");
-        makingEffect = false;
         state.started = false;
       end
       local requireRunes = {};
@@ -527,7 +478,6 @@ function MRuneExchange.OnUpdate(_elapsedTime)
         if (spaceCount == 0) then
           helper.log("[mRuneExchange] Not enough space");
           state.started = false;
-          makingEffect = false;
           return;
         end
         helper.log("[mRuneExchange] Making runes combination effect");
@@ -589,16 +539,11 @@ function MRuneExchange.OnUpdate(_elapsedTime)
         newEffects = helper.flatten(newEffects);
         newEffects = helper.addArrayElement(newEffects, { action = "RESCAN_BAG" });
         effects = newEffects;
-        makingEffect = false;
         return;
       end
     end
   end
 end
-
-
-
-
 
 function MRuneExchange.validate()
   if MagicBoxFrame:IsVisible() == false then
@@ -629,8 +574,7 @@ function MRuneExchange.validate()
 end
 
 function MRuneExchange.startExchange()
-  --MRuneExchange.ScanBag();
+  MRuneExchange.ScanBag();
   state.freshStarted = true;
-  state.makingEffect = false;
   state.started = true;
 end
